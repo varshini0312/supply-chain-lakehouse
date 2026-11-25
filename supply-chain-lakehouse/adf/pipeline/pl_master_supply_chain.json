@@ -1,0 +1,45 @@
+{
+  "name": "pl_master_supply_chain",
+  "properties": {
+    "description": "Master data pipeline: ingest -> bronze -> silver (CDC merge) -> gold -> DQ",
+    "activities": [
+      { "name": "ForEachDimTable", "type": "ForEach",
+        "typeProperties": {
+          "items": { "value": "@createArray('supplier','product','warehouse')", "type": "Expression" },
+          "isSequential": false,
+          "activities": [ { "name": "IngestDim", "type": "ExecutePipeline",
+              "typeProperties": { "pipeline": { "referenceName": "pl_ingest_table_incremental", "type": "PipelineReference" },
+                "parameters": { "schemaName": "scm", "tableName": "@item()" }, "waitOnCompletion": true } } ]
+        } },
+      { "name": "ForEachFactTableCDC", "type": "ForEach",
+        "typeProperties": {
+          "items": { "value": "@createArray('inventory','purchase_order','customer_order','shipment')", "type": "Expression" },
+          "isSequential": false,
+          "activities": [ { "name": "IngestCDC", "type": "ExecutePipeline",
+              "typeProperties": { "pipeline": { "referenceName": "pl_ingest_cdc", "type": "PipelineReference" },
+                "parameters": { "tableName": "@item()" }, "waitOnCompletion": true } } ]
+        } },
+      { "name": "IngestVendorFiles", "type": "ExecutePipeline",
+        "typeProperties": { "pipeline": { "referenceName": "pl_ingest_vendor_files", "type": "PipelineReference" }, "waitOnCompletion": true } },
+      { "name": "RunBronze", "type": "DatabricksNotebook",
+        "dependsOn": [ { "activity": "ForEachDimTable", "dependencyConditions": ["Succeeded"] },
+                       { "activity": "ForEachFactTableCDC", "dependencyConditions": ["Succeeded"] },
+                       { "activity": "IngestVendorFiles", "dependencyConditions": ["Succeeded"] } ],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": { "notebookPath": "/Workspace/supply_chain/notebooks/01_bronze_autoloader",
+          "baseParameters": { "run_date": "@formatDateTime(utcnow(),'yyyy-MM-dd')" } } },
+      { "name": "RunSilverCDC", "type": "DatabricksNotebook",
+        "dependsOn": [ { "activity": "RunBronze", "dependencyConditions": ["Succeeded"] } ],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": { "notebookPath": "/Workspace/supply_chain/notebooks/03_silver_cdc_merge" } },
+      { "name": "RunGold", "type": "DatabricksNotebook",
+        "dependsOn": [ { "activity": "RunSilverCDC", "dependencyConditions": ["Succeeded"] } ],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": { "notebookPath": "/Workspace/supply_chain/notebooks/04_gold_marts" } },
+      { "name": "RunDQChecks", "type": "DatabricksNotebook",
+        "dependsOn": [ { "activity": "RunGold", "dependencyConditions": ["Succeeded"] } ],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": { "notebookPath": "/Workspace/supply_chain/notebooks/05_data_quality" } }
+    ]
+  }
+}

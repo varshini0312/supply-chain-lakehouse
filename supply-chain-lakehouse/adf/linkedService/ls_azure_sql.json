@@ -1,0 +1,13 @@
+{
+  "name": "ls_azure_sql_scm",
+  "properties": {
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+      "connectionString": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_key_vault", "type": "LinkedServiceReference" },
+        "secretName": "sql-scm-connection-string"
+      }
+    }
+  }
+}

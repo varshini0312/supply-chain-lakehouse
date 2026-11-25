@@ -1,0 +1,55 @@
+{
+  "name": "pl_ingest_table_incremental",
+  "properties": {
+    "description": "ELT: incremental copy of one SQL table to ADLS landing using watermark",
+    "parameters": { "schemaName": {"type":"string"}, "tableName": {"type":"string"} },
+    "activities": [
+      {
+        "name": "LookupOldWatermark", "type": "Lookup",
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource",
+            "sqlReaderQuery": { "value": "SELECT watermark_value FROM dbo.watermark WHERE table_name = '@{pipeline().parameters.tableName}'", "type": "Expression" } },
+          "dataset": { "referenceName": "ds_sql_table", "type": "DatasetReference",
+            "parameters": { "schemaName": "dbo", "tableName": "watermark" } }
+        }
+      },
+      {
+        "name": "LookupNewWatermark", "type": "Lookup",
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource",
+            "sqlReaderQuery": { "value": "SELECT MAX(updated_at) AS new_watermark FROM @{pipeline().parameters.schemaName}.@{pipeline().parameters.tableName}", "type": "Expression" } },
+          "dataset": { "referenceName": "ds_sql_table", "type": "DatasetReference",
+            "parameters": { "schemaName": "dbo", "tableName": "watermark" } }
+        }
+      },
+      {
+        "name": "CopyChangedRows", "type": "Copy",
+        "dependsOn": [
+          { "activity": "LookupOldWatermark", "dependencyConditions": ["Succeeded"] },
+          { "activity": "LookupNewWatermark", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource",
+            "sqlReaderQuery": { "value": "SELECT * FROM @{pipeline().parameters.schemaName}.@{pipeline().parameters.tableName} WHERE updated_at > '@{activity('LookupOldWatermark').output.firstRow.watermark_value}' AND updated_at <= '@{activity('LookupNewWatermark').output.firstRow.new_watermark}'", "type": "Expression" } },
+          "sink": { "type": "ParquetSink", "storeSettings": { "type": "AzureBlobFSWriteSettings" } }
+        },
+        "inputs":  [{ "referenceName": "ds_sql_table", "type": "DatasetReference",
+                      "parameters": { "schemaName": "@pipeline().parameters.schemaName", "tableName": "@pipeline().parameters.tableName" } }],
+        "outputs": [{ "referenceName": "ds_adls_parquet", "type": "DatasetReference",
+                      "parameters": { "folderPath": "@concat('scm/', pipeline().parameters.tableName, '/', formatDateTime(utcnow(),'yyyy/MM/dd/HHmm'))" } }]
+      },
+      {
+        "name": "UpdateWatermark", "type": "SqlServerStoredProcedure",
+        "dependsOn": [ { "activity": "CopyChangedRows", "dependencyConditions": ["Succeeded"] } ],
+        "linkedServiceName": { "referenceName": "ls_azure_sql_scm", "type": "LinkedServiceReference" },
+        "typeProperties": {
+          "storedProcedureName": "dbo.usp_update_watermark",
+          "storedProcedureParameters": {
+            "table_name": { "value": "@pipeline().parameters.tableName", "type": "String" },
+            "value": { "value": "@activity('LookupNewWatermark').output.firstRow.new_watermark", "type": "DateTime" }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "pl_ingest_cdc",
+  "properties": {
+    "description": "CDC: reads cdc.scm_<table>_CT net changes (with operation flag) into ADLS landing",
+    "parameters": { "tableName": {"type":"string"} },
+    "activities": [
+      {
+        "name": "CopyCdcChanges", "type": "Copy",
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource",
+            "sqlReaderQuery": { "value": "DECLARE @from binary(10)=sys.fn_cdc_get_min_lsn('scm_@{pipeline().parameters.tableName}'); DECLARE @to binary(10)=sys.fn_cdc_get_max_lsn(); SELECT *, sys.fn_cdc_map_lsn_to_time(__$start_lsn) AS cdc_commit_ts FROM cdc.fn_cdc_get_all_changes_scm_@{pipeline().parameters.tableName}(@from,@to,'all')", "type": "Expression" } },
+          "sink": { "type": "ParquetSink", "storeSettings": { "type": "AzureBlobFSWriteSettings" } }
+        },
+        "outputs": [{ "referenceName": "ds_adls_parquet", "type": "DatasetReference",
+                      "parameters": { "folderPath": "@concat('cdc/', pipeline().parameters.tableName, '/', formatDateTime(utcnow(),'yyyy/MM/dd/HHmm'))" } }]
+      }
+    ]
+  }
+}

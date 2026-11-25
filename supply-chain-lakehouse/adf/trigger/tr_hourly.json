@@ -1,0 +1,8 @@
+{
+  "name": "tr_hourly",
+  "properties": {
+    "type": "ScheduleTrigger",
+    "typeProperties": { "recurrence": { "frequency": "Hour", "interval": 1, "startTime": "2026-11-01T00:00:00Z", "timeZone": "UTC" } },
+    "pipelines": [ { "pipelineReference": { "referenceName": "pl_master_supply_chain", "type": "PipelineReference" } } ]
+  }
+}

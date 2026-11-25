@@ -1,0 +1,29 @@
+{
+  "name": "pl_ingest_vendor_files",
+  "properties": {
+    "description": "ETL: vendor CSVs from Azure Blob -> ADLS landing (schema validated), then archive",
+    "activities": [
+      {
+        "name": "GetVendorFiles", "type": "GetMetadata",
+        "typeProperties": { "dataset": { "referenceName": "ds_blob_vendor_csv", "type": "DatasetReference" },
+                            "fieldList": ["childItems"] }
+      },
+      {
+        "name": "ForEachFile", "type": "ForEach",
+        "dependsOn": [ { "activity": "GetVendorFiles", "dependencyConditions": ["Succeeded"] } ],
+        "typeProperties": {
+          "items": { "value": "@activity('GetVendorFiles').output.childItems", "type": "Expression" },
+          "activities": [
+            { "name": "CopyToLanding", "type": "Copy",
+              "typeProperties": {
+                "source": { "type": "DelimitedTextSource", "storeSettings": { "type": "AzureBlobStorageReadSettings" } },
+                "sink":   { "type": "ParquetSink", "storeSettings": { "type": "AzureBlobFSWriteSettings" } },
+                "enableSkipIncompatibleRow": true,
+                "logSettings": { "enableCopyActivityLog": true }
+              } }
+          ]
+        }
+      }
+    ]
+  }
+}

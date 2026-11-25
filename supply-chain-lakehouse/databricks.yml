@@ -1,0 +1,52 @@
+bundle:
+  name: supply_chain_lakehouse
+
+variables:
+  catalog:
+    default: supply_chain_dev
+
+resources:
+  pipelines:
+    supply_chain_lakeflow:
+      name: supply-chain-lakeflow-${bundle.target}
+      catalog: ${var.catalog}
+      target: silver
+      serverless: true
+      continuous: false
+      libraries:
+        - notebook:
+            path: ./databricks/lakeflow/supply_chain_pipeline.py
+      configuration:
+        landing_path: abfss://landing@<storage-account>.dfs.core.windows.net
+
+  jobs:
+    medallion_batch_job:
+      name: supply-chain-medallion-${bundle.target}
+      schedule:
+        quartz_cron_expression: "0 15 * * * ?"
+        timezone_id: UTC
+      tasks:
+        - task_key: bronze
+          notebook_task: { notebook_path: ./databricks/notebooks/01_bronze_autoloader.py }
+        - task_key: silver_dims
+          depends_on: [{ task_key: bronze }]
+          notebook_task: { notebook_path: ./databricks/notebooks/02_silver_dimensions.py }
+        - task_key: silver_cdc
+          depends_on: [{ task_key: bronze }]
+          notebook_task: { notebook_path: ./databricks/notebooks/03_silver_cdc_merge.py }
+        - task_key: gold
+          depends_on: [{ task_key: silver_dims }, { task_key: silver_cdc }]
+          notebook_task: { notebook_path: ./databricks/notebooks/04_gold_marts.py }
+        - task_key: dq
+          depends_on: [{ task_key: gold }]
+          notebook_task: { notebook_path: ./databricks/notebooks/05_data_quality.py }
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace: { host: https://<dev-workspace>.azuredatabricks.net }
+  prod:
+    mode: production
+    variables: { catalog: supply_chain_prod }
+    workspace: { host: https://<prod-workspace>.azuredatabricks.net }

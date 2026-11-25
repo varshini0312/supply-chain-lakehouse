@@ -1,0 +1,12 @@
+{
+  "name": "ds_sql_table",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_azure_sql_scm", "type": "LinkedServiceReference" },
+    "parameters": { "schemaName": { "type": "string" }, "tableName": { "type": "string" } },
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "schema": { "value": "@dataset().schemaName", "type": "Expression" },
+      "table":  { "value": "@dataset().tableName",  "type": "Expression" }
+    }
+  }
+}

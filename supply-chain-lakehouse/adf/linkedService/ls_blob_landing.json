@@ -1,0 +1,7 @@
+{
+  "name": "ls_blob_landing",
+  "properties": {
+    "type": "AzureBlobStorage",
+    "typeProperties": { "serviceEndpoint": "https://<vendor-storage>.blob.core.windows.net/" }
+  }
+}

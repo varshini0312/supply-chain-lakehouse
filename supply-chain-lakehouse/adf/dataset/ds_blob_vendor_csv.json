@@ -1,0 +1,11 @@
+{
+  "name": "ds_blob_vendor_csv",
+  "properties": {
+    "linkedServiceName": { "referenceName": "ls_blob_landing", "type": "LinkedServiceReference" },
+    "type": "DelimitedText",
+    "typeProperties": {
+      "location": { "type": "AzureBlobStorageLocation", "container": "vendor-inbound" },
+      "columnDelimiter": ",", "firstRowAsHeader": true
+    }
+  }
+}
